@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Moveset Creator · reanim</title>
+  <title>Moveset Creator · reanim + emotes</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
   <style>
@@ -264,6 +264,7 @@
     .badge-action { background: rgba(124, 109, 250, 0.12); color: #a78bfa; border: 1px solid rgba(124, 109, 250, 0.2); }
     .badge-sound { background: rgba(251, 191, 36, 0.12); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.2); }
     .badge-mode-atk { background: rgba(244, 114, 182, 0.12); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.2); }
+    .badge-emote { background: rgba(52, 211, 153, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
     .exp-btn {
       background: none;
       border: none;
@@ -520,6 +521,16 @@
     </div>
   </section>
 
+  <!-- EMOTES TAB (New) -->
+  <section class="card">
+    <div class="card-head"><span class="dot" style="background:#34d399;box-shadow:0 0 8px #34d399"></span><span class="card-title">Emotes <span style="font-weight:400;color:#505070;font-size:0.6rem;text-transform:none;font-family:'JetBrains Mono'">Dance modules</span></span></div>
+    <div class="card-body">
+      <div class="notice">Each emote generates a separate dance module .lua file. Fill in name, description, anim file, and optional music.</div>
+      <div id="emoteList"><div class="empty">No emotes yet — click "Add emote".</div></div>
+      <div class="btn-row"><button class="btn btn-green" onclick="addEmote()">+ Add emote</button></div>
+    </div>
+  </section>
+
   <!-- Output -->
   <section class="card">
     <div class="card-head"><span class="dot" style="background:#34d399;box-shadow:0 0 8px #34d399"></span><span class="card-title">Generated Lua</span></div>
@@ -574,6 +585,7 @@
   // -------- STATE --------
   let assets = [];
   let modes = [];
+  let emotes = []; // emote objects
   let nextId = 0;
   const uid = () => ++nextId;
 
@@ -860,8 +872,60 @@
     });
   }
 
-  // -------- GENERATE --------
+  // -------- EMOTES (new) --------
+  function addEmote() {
+    const id = uid();
+    emotes.push({
+      id,
+      name: 'Dance',
+      description: 'cool moves',
+      animFile: 'Rock.anim',
+      musicFile: 'dance.mp3',
+      musicDesc: 'beat',
+      volume: 0.8,
+      startTime: 0,
+      endTime: 45.5
+    });
+    renderEmotes();
+  }
+  function removeEmote(id) { emotes = emotes.filter(e => e.id !== id); renderEmotes(); }
+  function setEmote(id, k, v) { const e = emotes.find(x => x.id === id); if (e) e[k] = v; }
+
+  function renderEmotes() {
+    const el = $('emoteList');
+    if (!emotes.length) { el.innerHTML = '<div class="empty">No emotes yet — click "Add emote".</div>'; return; }
+    el.innerHTML = '';
+    emotes.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'asset-row';
+      div.innerHTML = `
+        <div class="asset-row-top">
+          <input type="text" placeholder="Emote name" value="${esc(e.name)}" oninput="setEmote(${e.id},'name',this.value)" style="flex:1;min-width:80px">
+          <input type="text" placeholder="Description" value="${esc(e.description)}" oninput="setEmote(${e.id},'description',this.value)" style="flex:1;min-width:80px">
+          <input type="text" placeholder="Anim file .anim" value="${esc(e.animFile)}" oninput="setEmote(${e.id},'animFile',this.value)" style="flex:1;min-width:90px">
+          <span class="badge badge-emote">emote</span>
+          <button class="btn btn-red" onclick="removeEmote(${e.id})" style="padding:0.2rem 0.6rem;font-size:0.65rem">×</button>
+        </div>
+        <div class="asset-body open" style="display:flex">
+          <div class="grid-2">
+            <div class="field"><label>Music file (mp3)</label><input type="text" placeholder="dance.mp3" value="${esc(e.musicFile)}" oninput="setEmote(${e.id},'musicFile',this.value)"></div>
+            <div class="field"><label>Music description</label><input type="text" placeholder="beat" value="${esc(e.musicDesc)}" oninput="setEmote(${e.id},'musicDesc',this.value)"></div>
+          </div>
+          <div class="grid-3">
+            <div class="field"><label>Volume</label><input type="number" step="0.05" min="0" max="1" value="${e.volume}" oninput="setEmote(${e.id},'volume',this.value)"></div>
+            <div class="field"><label>Start time (s)</label><input type="number" step="0.5" min="0" value="${e.startTime}" oninput="setEmote(${e.id},'startTime',this.value)"></div>
+            <div class="field"><label>End time (s)</label><input type="number" step="0.5" min="0" value="${e.endTime}" oninput="setEmote(${e.id},'endTime',this.value)"></div>
+          </div>
+          <div class="notice">Generates a dance module: <code>UhhhhhhReanim/Modules/&lt;name&gt;.lua</code></div>
+        </div>
+      `;
+      el.appendChild(div);
+    });
+  }
+
+  // -------- GENERATE (moveset + emotes) --------
   let _code = '';
+  let _emoteCodes = {};
   function generate() {
     // sync key pickers
     actionAssets().forEach(a => { const e = document.getElementById('ak_'+a.id); if (e) a.key = e.value || a.key; });
@@ -870,6 +934,7 @@
       mo.attacks.forEach(a => { const e2 = document.getElementById('mak_'+a.id); if (e2) a.key = e2.value || a.key; });
     });
 
+    // --- MOVESET CODE (same as before) ---
     const name = (val('mName').trim() || 'MyMoveset').replace(/"/g,'\\"');
     const internal = val('mInternal').trim().replace(/\s/g,'') || 'mymoveset';
     const desc = (val('mDesc').trim() || '...').replace(/\n/g,'\\n').replace(/"/g,'\\"');
@@ -1312,7 +1377,7 @@
       ln('            text.Font = Enum.Font.GothamBold');
       ln('            text.TextScaled = true');
       ln('            text.TextColor3 = Color3.new(' + chatR + ', ' + chatG + ', ' + chatB + ')');
-      ln('            text.TextStrokeTransparency = ' + (chatStroke?'0':'1'));
+      ln('            text.TextStrokeTransparency = ' + (chatStroke?'0':'1');
       ln('            text.TextXAlignment = Enum.TextXAlignment.Left');
       ln('            text.Parent = HiddenGui');
       ln('            task.spawn(function()');
@@ -1479,6 +1544,70 @@
     ln('return modules');
 
     _code = L.join('\n');
+
+    // --- EMOTE MODULES ---
+    let emoteLua = {};
+    emotes.forEach((e, idx) => {
+      const ename = san(e.name || 'emote' + idx);
+      const fname = e.animFile || 'Rock.anim';
+      const mfile = e.musicFile || 'dance.mp3';
+      const mdesc = e.musicDesc || e.description || 'dance';
+      const vol = parseFloat(e.volume) || 0.8;
+      const st = parseFloat(e.startTime) || 0;
+      const et = parseFloat(e.endTime) || 45.5;
+
+      let lines = [];
+      lines.push('-- ' + ename + '.lua');
+      lines.push('-- Generated by Moveset Creator v6 (Emote)');
+      lines.push('-- Place in: UhhhhhhReanim/Modules/' + ename + '.lua');
+      lines.push('');
+      lines.push('local modules = {}');
+      lines.push('');
+      lines.push('table.insert(modules, function()');
+      lines.push('    local m = {}');
+      lines.push('    m.ModuleType  = "DANCE"');
+      lines.push('    m.Name        = "' + escLua(e.name || 'Emote') + '"');
+      lines.push('    m.Description = "' + escLua(e.description || '') + '"');
+      lines.push('    m.Assets = {"' + fname + '", "' + mfile + '"}');
+      lines.push('');
+      lines.push('    m.Config = function(parent)');
+      lines.push('        Util_CreateText(parent, "No settings.", 14, Enum.TextXAlignment.Center)');
+      lines.push('    end');
+      lines.push('');
+      lines.push('    m.SaveConfig = function() return {} end');
+      lines.push('    m.LoadConfig  = function(save) end');
+      lines.push('');
+      lines.push('    local animator = nil');
+      lines.push('    local start    = 0');
+      lines.push('');
+      lines.push('    m.Init = function(figure)');
+      lines.push('        SetOverrideDanceMusic(AssetGetContentId("' + mfile + '"), "' + escLua(mdesc) + '", ' + vol + ', NumberRange.new(' + st + ', ' + et + '))');
+      lines.push('');
+      lines.push('        start           = os.clock()');
+      lines.push('        animator        = AnimLib.Animator.new()');
+      lines.push('        animator.rig    = figure');
+      lines.push('        animator.track  = AnimLib.Track.fromfile(AssetGetPathFromFilename("' + fname + '"))');
+      lines.push('        animator.looped = true');
+      lines.push('        animator.speed  = 1');
+      lines.push('    end');
+      lines.push('');
+      lines.push('    m.Update = function(dt, figure)');
+      lines.push('        animator:Step(os.clock() - start)');
+      lines.push('    end');
+      lines.push('');
+      lines.push('    m.Destroy = function(figure)');
+      lines.push('        animator = nil');
+      lines.push('    end');
+      lines.push('');
+      lines.push('    return m');
+      lines.push('end)');
+      lines.push('');
+      lines.push('return modules');
+      emoteLua[ename] = lines.join('\n');
+    });
+    _emoteCodes = emoteLua;
+
+    // Display moveset in preview
     $('codeOut').textContent = _code;
     $('codeOut2').textContent = _code;
     $('codeOut2').style.color = '';
@@ -1508,7 +1637,7 @@
     addAsset('base'); let a = assets[assets.length-1]; a.name = 'idle mymoveset.anim'; a.baseRole = 'idle';
     addAsset('base'); a = assets[assets.length-1]; a.name = 'walk mymoveset.anim'; a.baseRole = 'walk';
     addAsset('base'); a = assets[assets.length-1]; a.name = 'jump mymoveset.anim'; a.baseRole = 'jump';
-    renderAssets(); renderModes();
+    renderAssets(); renderModes(); renderEmotes();
   })();
 </script>
 </body>
